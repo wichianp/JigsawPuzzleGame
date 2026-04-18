@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Jigsaw Puzzle</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --text: #f8fafc;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; /* Prevent text selection during drag */
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg), #1e1b4b);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            background: linear-gradient(to right, #818cf8, #f472b6);
+            -webkit-background-clip: text;
+            color: transparent;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            max-width: 600px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        input[type="file"], select, button {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: none;
+            outline: none;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        button {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.5);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #game-board-container {
+            position: relative;
+            margin-top: 30px;
+            width: 100%;
+            max-width: 80vw;
+            max-height: 60vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-board {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            touch-action: none; /* Prevent scroll on touch */
+        }
+
+        .piece {
+            position: absolute;
+            background-repeat: no-repeat;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s, border 0.2s;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .piece:hover {
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        }
+
+        .piece.selected {
+            border: 2px solid #34d399;
+            z-index: 20;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(52, 211, 153, 0.6);
+        }
+
+        .piece.dragging {
+            z-index: 100;
+            opacity: 0.8;
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            transition: none; /* Remove transition for smooth drag */
+        }
+
+        .win-animation {
+            animation: winPulse 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes winPulse {
+            0% { box-shadow: 0 0 20px rgba(52, 211, 153, 0.4); border-color: rgba(52, 211, 153, 0.4); }
+            100% { box-shadow: 0 0 50px rgba(52, 211, 153, 1); border-color: rgba(52, 211, 153, 1); }
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        #overlay.active { display: flex; }
+        .overlay-content { text-align: center; }
+        .overlay-content h2 { font-size: 3rem; color: #34d399; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Pro Jigsaw</h1>
+        <p>อัปโหลดรูป เลือกระดับ แล้วลากวางเพื่อต่อภาพให้สมบูรณ์!</p>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="image-upload" accept="image/*">
+        <select id="grid-size">
+            <option value="2">ง่าย (4 ชิ้น)</option>
+            <option value="3">ปานกลาง (9 ชิ้น)</option>
+            <option value="4" selected>ยาก (16 ชิ้น)</option>
+            <option value="5">โปร (25 ชิ้น)</option>
+            <option value="6">มาสเตอร์ (36 ชิ้น)</option>
+        </select>
+        <button id="start-btn">เริ่มเกม</button>
+    </div>
+
+    <div class="stats">
+        <div class="stat-box">เวลา: <span id="timer">00:00</span></div>
+        <div class="stat-box">คะแนน: <span id="score">0</span></div>
+    </div>
+
+    <div id="game-board-container">
+        <div id="game-board"></div>
+    </div>
+
+    <div id="overlay">
+        <div class="overlay-content">
+            <h2>ยินดีด้วย! คุณชนะแล้ว 🎉</h2>
+            <p style="font-size: 1.5rem; margin-bottom: 20px;">คะแนนของคุณ: <span id="final-score">0</span></p>
+            <p id="save-status" style="color: #60a5fa; margin-bottom: 20px;"></p>
+            <button onclick="document.getElementById('overlay').classList.remove('active')">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+
+    <audio id="sfx-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+    <audio id="sfx-drop" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+    <audio id="sfx-win" src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3"></audio>
+
+<script>
+    // URL ของ Google Apps Script (นำมาใส่หลังจาก Deploy ฝั่ง Google Sheets เสร็จ)
+    const GOOGLE_SHEETS_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
+
+    const board = document.getElementById('game-board');
+    const container = document.getElementById('game-board-container');
+    const imageUpload = document.getElementById('image-upload');
+    const startBtn = document.getElementById('start-btn');
+    const gridSizeSelect = document.getElementById('grid-size');
+    const timerDisplay = document.getElementById('timer');
+    const scoreDisplay = document.getElementById('score');
+
+    let currentImgBase64 = null;
+    let pieces = [];
+    let gridSize = 4;
+    let pieceWidth, pieceHeight;
+    let timerInterval;
+    let seconds = 0;
+    let isPlaying = false;
+    let selectedPiece = null;
+
+    // ระบบลากวาง (Drag state)
+    let draggedPiece = null;
+    let dragStartX, dragStartY;
+    let initialLeft, initialTop;
+
+    // Load Image
+    imageUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                currentImgBase64 = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    startBtn.addEventListener('click', () => {
+        if (!currentImgBase64) {
+            alert('กรุณาอัปโหลดรูปภาพก่อนเริ่มเกม!');
+            return;
+        }
+        startGame();
+    });
+
+    function startGame() {
+        clearInterval(timerInterval);
+        seconds = 0;
+        updateTimerDisplay();
+        scoreDisplay.innerText = "0";
+        board.innerHTML = '';
+        board.classList.remove('win-animation');
+        pieces = [];
+        selectedPiece = null;
+        gridSize = parseInt(gridSizeSelect.value);
+
+        const img = new Image();
+        img.src = currentImgBase64;
+        img.onload = () => {
+            setupBoard(img);
+            createPieces(img);
+            shufflePieces();
+            isPlaying = true;
+            timerInterval = setInterval(updateTimer, 1000);
+            playSound('sfx-click');
+        };
+    }
+
+    function setupBoard(img) {
+        // คำนวณขนาดกระดานให้พอดีจอ
+        const maxWidth = container.clientWidth;
+        const maxHeight = window.innerHeight * 0.6; // 60vh
+        const ratio = img.width / img.height;
+
+        let boardWidth = maxWidth;
+        let boardHeight = boardWidth / ratio;
+
+        if (boardHeight > maxHeight) {
+            boardHeight = maxHeight;
+            boardWidth = boardHeight * ratio;
+        }
+
+        board.style.width = `${boardWidth}px`;
+        board.style.height = `${boardHeight}px`;
+
+        pieceWidth = boardWidth / gridSize;
+        pieceHeight = boardHeight / gridSize;
+    }
+
+    function createPieces(img) {
+        let index = 0;
+        for (let y = 0; y < gridSize; y++) {
+            for (let x = 0; x < gridSize; x++) {
+                const piece = document.createElement('div');
+                piece.classList.add('piece');
+                piece.style.width = `${pieceWidth}px`;
+                piece.style.height = `${pieceHeight}px`;
+                piece.style.backgroundImage = `url(${img.src})`;
+                piece.style.backgroundSize = `${board.style.width} ${board.style.height}`;
+                
+                // ตำแหน่งรูปภายในชิ้นส่วน
+                piece.style.backgroundPosition = `-${x * pieceWidth}px -${y * pieceHeight}px`;
+
+                // ตำแหน่งปัจจุบันของชิ้นส่วน (เริ่มต้นให้อยู่ถูกที่ก่อนสลับ)
+                piece.style.left = `${x * pieceWidth}px`;
+                piece.style.top = `${y * pieceHeight}px`;
+
+                // เก็บ Data
+                piece.dataset.correctIndex = index;
+                piece.dataset.currentIndex = index;
+                piece.dataset.x = x;
+                piece.dataset.y = y;
+
+                // Event Listeners (รองรับทั้ง Mouse และ Touch ผ่าน Pointer Events)
+                piece.addEventListener('pointerdown', handlePointerDown);
+                
+                board.appendChild(piece);
+                pieces.push(piece);
+                index++;
+            }
+        }
+    }
+
+    function shufflePieces() {
+        const positions = pieces.map(p => ({ left: p.style.left, top: p.style.top }));
+        // Fisher-Yates Shuffle
+        for (let i = positions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [positions[i], positions[j]] = [positions[j], positions[i]];
+        }
+
+        pieces.forEach((piece, i) => {
+            piece.style.left = positions[i].left;
+            piece.style.top = positions[i].top;
+            
+            // อัปเดต currentIndex x, y ชั่วคราวสำหรับการเช็ค
+            const px = parseFloat(positions[i].left) / pieceWidth;
+            const py = parseFloat(positions[i].top) / pieceHeight;
+            piece.dataset.currentIndex = Math.round(py * gridSize + px);
+            
+            // Animation ตอนสลับ
+            piece.style.transition = 'left 0.5s, top 0.5s';
+            setTimeout(() => { piece.style.transition = 'transform 0.1s, box-shadow 0.2s, border 0.2s'; }, 500);
+        });
+    }
+
+    // --- Interaction Logic (Click 2 swap & Drag-Drop) ---
+    function handlePointerDown(e) {
+        if (!isPlaying) return;
+        
+        // คลิกระบบสลับ 2 ชิ้น
+        if (!draggedPiece && e.pointerType === 'mouse' && e.button === 0) {
+            handlePieceClick(e.target);
+        }
+
+        // ระบบ Drag & Drop (ทำงานได้ทั้งทัชสกรีนและเมาส์)
+        draggedPiece = e.target;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        initialLeft = parseFloat(draggedPiece.style.left);
+        initialTop = parseFloat(draggedPiece.style.top);
+
+        draggedPiece.classList.add('dragging');
+        draggedPiece.setPointerCapture(e.pointerId);
+
+        draggedPiece.addEventListener('pointermove', handlePointerMove);
+        draggedPiece.addEventListener('pointerup', handlePointerUp);
+        playSound('sfx-click');
+    }
+
+    function handlePointerMove(e) {
+        if (!draggedPiece) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        draggedPiece.style.left = `${initialLeft + dx}px`;
+        draggedPiece.style.top = `${initialTop + dy}px`;
+    }
+
+    function handlePointerUp(e) {
+        if (!draggedPiece) return;
+        draggedPiece.removeEventListener('pointermove', handlePointerMove);
+        draggedPiece.removeEventListener('pointerup', handlePointerUp);
+        draggedPiece.releasePointerCapture(e.pointerId);
+        draggedPiece.classList.remove('dragging');
+
+        // หาชิ้นส่วนที่ถูกดรอปทับ (ลบ drag piece ออกชั่วคราวเพื่อหา element ข้างใต้)
+        draggedPiece.style.visibility = 'hidden';
+        const elementBelow = document.elementFromPoint(e.clientX, e.clientY);
+        draggedPiece.style.visibility = 'visible';
+
+        const targetPiece = elementBelow ? elementBelow.closest('.piece') : null;
+
+        if (targetPiece && targetPiece !== draggedPiece) {
+            // Swap!
+            swapPieces(draggedPiece, targetPiece, initialLeft, initialTop);
+            playSound('sfx-drop');
+        } else {
+            // Snap back
+            draggedPiece.style.left = `${initialLeft}px`;
+            draggedPiece.style.top = `${initialTop}px`;
+        }
+
+        draggedPiece = null;
+        checkWin();
+    }
+
+    // ระบบคลิก 2 ชิ้น
+    function handlePieceClick(piece) {
+        if (!selectedPiece) {
+            selectedPiece = piece;
+            piece.classList.add('selected');
+        } else {
+            if (selectedPiece !== piece) {
+                const sl = parseFloat(selectedPiece.style.left);
+                const st = parseFloat(selectedPiece.style.top);
+                swapPieces(selectedPiece, piece, sl, st);
+                playSound('sfx-drop');
+                checkWin();
+            }
+            selectedPiece.classList.remove('selected');
+            selectedPiece = null;
+        }
+    }
+
+    function swapPieces(p1, p2, p1OrigLeft, p1OrigTop) {
+        // สลับตำแหน่ง CSS
+        const p2Left = p2.style.left;
+        const p2Top = p2.style.top;
+
+        p1.style.transition = 'left 0.2s, top 0.2s';
+        p2.style.transition = 'left 0.2s, top 0.2s';
+
+        p1.style.left = p2Left;
+        p1.style.top = p2Top;
+        p2.style.left = `${p1OrigLeft}px`;
+        p2.style.top = `${p1OrigTop}px`;
+
+        // คืนค่า transition เดิมหลังสลับเสร็จ
+        setTimeout(() => {
+            p1.style.transition = 'transform 0.1s, box-shadow 0.2s, border 0.2s';
+            p2.style.transition = 'transform 0.1s, box-shadow 0.2s, border 0.2s';
+        }, 200);
+
+        // สลับ currentIndex
+        const tempIdx = p1.dataset.currentIndex;
+        p1.dataset.currentIndex = p2.dataset.currentIndex;
+        p2.dataset.currentIndex = tempIdx;
+    }
+
+    function checkWin() {
+        let isWin = true;
+        pieces.forEach(p => {
+            if (p.dataset.currentIndex !== p.dataset.correctIndex) {
+                isWin = false;
+            }
+        });
+
+        if (isWin && isPlaying) {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            playSound('sfx-win');
+            
+            // คำนวณคะแนน: ฐานคะแนน(ขึ้นอยู่กับจำนวนชิ้น) - เวลาที่ใช้
+            const baseScore = gridSize * gridSize * 100;
+            const finalScore = Math.max(0, baseScore - (seconds * 10));
+            scoreDisplay.innerText = finalScore;
+
+            board.classList.add('win-animation');
+            pieces.forEach(p => p.style.border = 'none'); // ซ่อนรอยต่อ
+            
+            showWinOverlay(finalScore);
+            saveToGoogleSheets(finalScore, seconds, gridSize * gridSize);
+        }
+    }
+
+    // --- Utilities ---
+    function updateTimer() {
+        seconds++;
+        updateTimerDisplay();
+        // ลดคะแนนแบบ Real-time ขำๆ
+        const maxScore = gridSize * gridSize * 100;
+        scoreDisplay.innerText = Math.max(0, maxScore - (seconds * 10));
+    }
+
+    function updateTimerDisplay() {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        timerDisplay.innerText = `${m}:${s}`;
+    }
+
+    function playSound(id) {
+        const audio = document.getElementById(id);
+        if(audio) {
+            audio.currentTime = 0;
+            audio.play().catch(e => console.log('Audio play prevented by browser'));
+        }
+    }
+
+    function showWinOverlay(score) {
+        const overlay = document.getElementById('overlay');
+        document.getElementById('final-score').innerText = score;
+        overlay.classList.add('active');
+    }
+
+    // --- Backend Integration ---
+    async function saveToGoogleSheets(score, time, piecesCount) {
+        const statusText = document.getElementById('save-status');
+        if (GOOGLE_SHEETS_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL") {
+            statusText.innerText = "ยังไม่ได้เชื่อมต่อ Google Sheets API (ข้ามการบันทึก)";
+            return;
+        }
+
+        statusText.innerText = "กำลังบันทึกคะแนน...";
+        try {
+            const response = await fetch(GOOGLE_SHEETS_URL, {
+                method: "POST",
+                mode: 'no-cors', // สำคัญมากสำหรับการยิง POST ไป GAS จากฝั่ง Client โดยตรง
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    score: score,
+                    time_seconds: time,
+                    level: `${piecesCount} pieces`
+                })
+            });
+            statusText.innerText = "บันทึกคะแนนลงเซิร์ฟเวอร์เรียบร้อย!";
+            statusText.style.color = "#34d399";
+        } catch (error) {
+            console.error("Error saving score:", error);
+            statusText.innerText = "เกิดข้อผิดพลาดในการบันทึกคะแนน";
+            statusText.style.color = "#f87171";
+        }
+    }
+
+</script>
+</body>
+</html>
